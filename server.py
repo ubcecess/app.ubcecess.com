@@ -7,8 +7,8 @@ import httplib2
 from apiclient import discovery
 from oauth2client import client
 
-from ecessprivate.ecessdb import CLIENT_ID, CLIENT_SECRET, SERVICE_CREDENTIALS
-
+from ecessprivate.ecessdb import CLIENT_ID, CLIENT_SECRET
+from ecessdb import get_drive_conn
 
 app = flask.Flask(__name__)
 
@@ -57,6 +57,13 @@ def authenticated(*usertypes):
             return fn(credentials, *args, **kwargs)
         return wrapped
     return oauthorized2
+
+
+def get_db():
+    top = flask._app_ctx_stack
+    if not hasattr(top, 'drive_conn'):
+        top.drive_conn = get_drive_conn()
+    return top.drive_conn
 
 
 def _get_service(api, version, credentials):
