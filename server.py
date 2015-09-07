@@ -140,6 +140,7 @@ if __name__ == '__main__':
 
     app.secret_key = str(uuid.uuid4())
     app.debug = os.getenv("FLASK_DEBUG") == "1"
+    app.config["SERVER_NAME"] = "app.ubcecess.com:80"
     if app.debug:
         print("WARNING: DEBUG MODE IS ENABLED!")
     app.run()
