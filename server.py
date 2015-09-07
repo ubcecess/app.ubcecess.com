@@ -123,7 +123,8 @@ def oauth2callback():
         client_id=CLIENT_ID,
         client_secret=CLIENT_SECRET,
         scope=scope_urls,
-        redirect_uri=flask.url_for('oauth2callback', _external=True)
+        #redirect_uri=flask.url_for('oauth2callback', _external=True)
+        redirect_uri="http://app.ubcecess.com/oauth2callback"
     )
     if 'code' not in flask.request.args:
         auth_uri = flow.step1_get_authorize_url()
