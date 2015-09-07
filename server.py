@@ -7,7 +7,7 @@ import httplib2
 from apiclient import discovery
 from oauth2client import client
 
-from ecessprivate.ecessdb import CLIENT_ID, CLIENT_SECRET, APP_CLIENT_ID, APP_CLIENT_SECRET
+from ecessprivate.ecessdb import APP_CLIENT_ID, APP_CLIENT_SECRET
 from ecessdb import get_drive_conn
 
 app = flask.Flask(__name__)
@@ -124,7 +124,6 @@ def oauth2callback():
         client_secret=APP_CLIENT_SECRET,
         scope=scope_urls,
         redirect_uri=flask.url_for('oauth2callback', _external=True)
-        #redirect_uri="http://app.ubcecess.com/oauth2callback"
     )
     if 'code' not in flask.request.args:
         auth_uri = flow.step1_get_authorize_url()
