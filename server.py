@@ -1,4 +1,5 @@
 import json
+from functools import wraps
 
 import flask
 import httplib2
@@ -11,19 +12,32 @@ from ecessprivate.ecessdb import CLIENT_ID, CLIENT_SECRET
 app = flask.Flask(__name__)
 
 
+def oauthorized2(fn):
+    @wraps(fn)
+    def wrapped(*args, **kwargs):
+        if 'credentials' not in flask.session:
+            return flask.redirect(flask.url_for('oauth2callback'))
+        credentials = client.OAuth2Credentials.from_json(
+            flask.session['credentials'])
+        if credentials.access_token_expired:
+            return flask.redirect(flask.url_for('oauth2callback'))
+
+        return fn(credentials, *args, **kwargs)
+    return wrapped
+
+
+def get_drive_service(credentials):
+    http_auth = credentials.authorize(httplib2.Http())
+    drive_service = discovery.build('drive', 'v2', http_auth)
+    return drive_service
+
+
 @app.route('/')
-def index():
-    if 'credentials' not in flask.session:
-        return flask.redirect(flask.url_for('oauth2callback'))
-    credentials = client.OAuth2Credentials.from_json(
-        flask.session['credentials'])
-    if credentials.access_token_expired:
-        return flask.redirect(flask.url_for('oauth2callback'))
-    else:
-        http_auth = credentials.authorize(httplib2.Http())
-        drive_service = discovery.build('drive', 'v2', http_auth)
-        files = drive_service.files().list().execute()
-        return json.dumps(files)
+@oauthorized2
+def index(credentials):
+    drive_service = get_drive_service(credentials)
+    files = drive_service.files().list().execute()
+    return json.dumps(files)
 
 
 @app.route('/oauth2callback')
