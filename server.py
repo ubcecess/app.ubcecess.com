@@ -24,11 +24,18 @@ SCOPES = {
     TYPE_EDITOR: [SCOPE_DRIVE]
 }
 
+URL_ROOT = "app.ubcecess.com"
 
 class SessKeys(object):
     post_auth_redirect = "post_auth_redirect"
     usertypes = "usertypes"
     credentials = "credentials"
+
+
+def _build_url(endpoint=None, path=None):
+    if endpoint is not None:
+        path = flask.url_for(endpoint)
+    return "{}{}".format(URL_ROOT, path)
 
 
 def authenticated(*usertypes):
@@ -39,7 +46,7 @@ def authenticated(*usertypes):
     def oauthorized2(fn):
         @wraps(fn)
         def wrapped(*args, **kwargs):
-            flask.session[SessKeys.post_auth_redirect] = flask.request.path
+            flask.session[SessKeys.post_auth_redirect] = _build_url(path=flask.request.path)
 
             if SessKeys.usertypes not in flask.session:
                 flask.session[SessKeys.usertypes] = []
@@ -48,11 +55,11 @@ def authenticated(*usertypes):
                     flask.session[SessKeys.usertypes].append(usertype)
 
             if SessKeys.credentials not in flask.session:
-                return flask.redirect(flask.url_for('oauth2callback'))
+                return flask.redirect(_build_url(path='/oauth2callback'))
             credentials = client.OAuth2Credentials.from_json(
                 flask.session[SessKeys.credentials])
             if credentials.access_token_expired:
-                return flask.redirect(flask.url_for('oauth2callback'))
+                return flask.redirect(_build_url(path='/oauth2callback'))
 
             return fn(credentials, *args, **kwargs)
         return wrapped
@@ -123,7 +130,7 @@ def oauth2callback():
         client_id=CLIENT_ID,
         client_secret=CLIENT_SECRET,
         scope=scope_urls,
-        redirect_uri=flask.url_for('oauth2callback', _external=True)
+        redirect_uri=_build_url(path="/oauth2callback")
     )
     if 'code' not in flask.request.args:
         auth_uri = flow.step1_get_authorize_url()
