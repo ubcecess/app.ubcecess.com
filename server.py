@@ -1,4 +1,5 @@
 import json
+import os
 from functools import wraps
 
 import flask
@@ -6,7 +7,7 @@ import httplib2
 from apiclient import discovery
 from oauth2client import client
 
-from ecessprivate.ecessdb import CLIENT_ID, CLIENT_SECRET
+from ecessprivate.ecessdb import CLIENT_ID, CLIENT_SECRET, SERVICE_CREDENTIALS
 
 
 app = flask.Flask(__name__)
@@ -24,6 +25,12 @@ SCOPES = {
 }
 
 
+class SessKeys(object):
+    post_auth_redirect = "post_auth_redirect"
+    usertypes = "usertypes"
+    credentials = "credentials"
+
+
 def authenticated(*usertypes):
     """Decorator for authentication with Google OAuth2
 
@@ -32,16 +39,18 @@ def authenticated(*usertypes):
     def oauthorized2(fn):
         @wraps(fn)
         def wrapped(*args, **kwargs):
-            if "usertype" not in flask.session:
-                flask.session["usertypes"] = []
-            for usertype in usertypes:
-                if usertype not in flask.session["usertypes"]:
-                    flask.session["usertypes"].append(usertype)
+            flask.session[SessKeys.post_auth_redirect] = flask.request.path
 
-            if 'credentials' not in flask.session:
+            if SessKeys.usertypes not in flask.session:
+                flask.session[SessKeys.usertypes] = []
+            for usertype in usertypes:
+                if usertype not in flask.session[SessKeys.usertypes]:
+                    flask.session[SessKeys.usertypes].append(usertype)
+
+            if SessKeys.credentials not in flask.session:
                 return flask.redirect(flask.url_for('oauth2callback'))
             credentials = client.OAuth2Credentials.from_json(
-                flask.session['credentials'])
+                flask.session[SessKeys.credentials])
             if credentials.access_token_expired:
                 return flask.redirect(flask.url_for('oauth2callback'))
 
@@ -67,19 +76,37 @@ def get_oauth2_service(credentials):
     return _get_service('oauth2', 'v2', credentials)
 
 
+# @app.route('/')
+# @authenticated(TYPE_USER)
+# def index(credentials):
+#     # drive_service = get_drive_service(credentials)
+#     # files = drive_service.files().list().execute()
+#     # return json.dumps(get_plus_service(credentials).people().get(userId="me").execute())
+#     oauth2_service = get_oauth2_service(credentials)
+#     return json.dumps(oauth2_service.userinfo().get().execute())
+
+
 @app.route('/')
+def index():
+    return "This is an index page. If you were trying to do something" \
+           " else but ended up here, please email contact@ubcecess.com."
+
+
+@app.route('/student/register')
 @authenticated(TYPE_USER)
-def index(credentials):
-    #drive_service = get_drive_service(credentials)
-    #files = drive_service.files().list().execute()
-    #return json.dumps(get_plus_service(credentials).people().get(userId="me").execute())
+def student_register(credentials):
+    FORM_URL = "https://docs.google.com/forms/d/" \
+    "1TUjrEqJbVIMILbItA8WG1vSIhL5VNTn3-H7sQfqzJdY/" \
+    "viewform?entry.511477521={google_email}"
+
     oauth2_service = get_oauth2_service(credentials)
-    return json.dumps(oauth2_service.userinfo().get().execute())
+    google_email = oauth2_service.userinfo().get().execute()["email"]
+    return flask.redirect(FORM_URL.format(google_email=google_email))
 
 
 @app.route('/oauth2callback')
 def oauth2callback():
-    usertypes = flask.session["usertypes"]
+    usertypes = flask.session[SessKeys.usertypes]
     scopes = [scope for usertype, scopes in SCOPES.items()
               for scope in scopes if usertype in usertypes]
     scope_urls = ['https://www.googleapis.com/auth/{}'.format(scope)
@@ -97,13 +124,15 @@ def oauth2callback():
     else:
         auth_code = flask.request.args.get('code')
         credentials = flow.step2_exchange(auth_code)
-        flask.session['credentials'] = credentials.to_json()
-        return flask.redirect(flask.url_for('index'))
+        flask.session[SessKeys.credentials] = credentials.to_json()
+        return flask.redirect(flask.session[SessKeys.post_auth_redirect])
 
 
 if __name__ == '__main__':
     import uuid
 
     app.secret_key = str(uuid.uuid4())
-    app.debug = True
+    app.debug = os.getenv("FLASK_DEBUG") == "1"
+    if app.debug:
+        print("WARNING: DEBUG MODE IS ENABLED!")
     app.run()
