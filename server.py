@@ -67,14 +67,25 @@ def get_db():
     return top.drive_conn
 
 
-def get_spreadsheet(name, cache_period=120):
+def get_spreadsheet_fromsvc(name, cache_period=120):
+    return _get_spreadsheet(name, cache_period, gc=None)
+
+def get_spreadsheet_fromusr(name, gc, cache_period=120):
+    return _get_spreadsheet(name, cache_period, gc)
+
+
+def _get_spreadsheet(name, cache_period, gc=None):
     """Grabs and returns worksheet1 for given workbook name
 
     Caches workbook (connection) for cache_period
+
+    :param gc: Must be provided when not using service credentials
+        to fetch a resource. If this is None, service credentials
+        will be used!
     """
-    def get_sheet(top):
+    def get_sheet(top, gc):
         print("Fetching workbook {}...".format(name))
-        gc = get_db()
+        gc = get_db() if gc is None else gc
         wks = gc.open(name).sheet1
         top.sheets[name] = (time(), wks)
 
@@ -83,11 +94,11 @@ def get_spreadsheet(name, cache_period=120):
         top.sheets = {}
 
     if name not in top.sheets:
-        get_sheet(top)
+        get_sheet(top, gc)
     else:
         t, wks = top.sheets[name]
         if time() - t > cache_period:
-            get_sheet(top)
+            get_sheet(top, gc)
 
     return top.sheets[name][1]
 
@@ -142,9 +153,9 @@ def _wkskeys(wks):
 
 
 def _get_free_lockers():
-    lockers = get_spreadsheet("Lockers", cache_period=600)
+    lockers = get_spreadsheet_fromsvc("Lockers", cache_period=600)
     lockers_keys = _wkskeys(lockers)
-    locker_sales = get_spreadsheet("Locker_Rentals", cache_period=30)
+    locker_sales = get_spreadsheet_fromsvc("Locker_Rentals", cache_period=30)
     locker_sales_keys = _wkskeys(locker_sales)
 
     rentable = {entry[lockers_keys["Number"]] for entry in
@@ -184,7 +195,7 @@ def rentalocker(credentials):
     google_email = oauth2_service.userinfo().get().execute()["email"]
 
     # Check if they're registered
-    wks = get_spreadsheet("ECESS 2015W Student Contact Form (Responses)")
+    wks = get_spreadsheet_fromsvc("ECESS 2015W Student Contact Form (Responses)")
     keys = {v: k for k, v in enumerate(wks.row_values(1))}
     for entry in wks.get_all_values()[1:]:
         if entry[keys["Google_Email"]] == google_email:
@@ -197,7 +208,7 @@ def rentalocker(credentials):
         )
 
     # Check if they have a locker sales entry
-    wks = get_spreadsheet("[ECESS] MCLD Locker Rental 2015W1 (Responses)")
+    wks = get_spreadsheet_fromsvc("[ECESS] MCLD Locker Rental 2015W1 (Responses)")
     locker_form_keys = {v: k for k, v in enumerate(wks.row_values(1))}
     for locker_form_entry in wks.get_all_values()[1:]:
         if locker_form_entry[locker_form_keys["Google_Email"]] == google_email:
@@ -211,7 +222,7 @@ def rentalocker(credentials):
 
     # Present their status
     res = ["Step 1 (Rental Request Form): Complete! We have received your form."]
-    wks = get_spreadsheet("Locker_Rentals")
+    wks = get_spreadsheet_fromsvc("Locker_Rentals")
     keys = {v: k for k, v in enumerate(wks.row_values(1))}
     for entry in wks.get_all_values()[1:]:
         if (
@@ -249,6 +260,13 @@ def rentalocker(credentials):
                    " there are any available lockers for you, we'll try "
                    "to process it as soon as possible!")
         return "\n<br>".join(res)
+
+
+@app.route('/admin/invoicestosend')
+@authenticated(TYPE_USER)
+def invoices_to_send(credentials):
+    wks = get_spreadsheet_fromusr("Locker_Rentals",
+                                  gc=get_drive_conn(credentials))
 
 
 @app.route('/oauth2callback')
