@@ -137,6 +137,46 @@ def student_register(credentials):
     return flask.redirect(FORM_URL.format(google_email=google_email))
 
 
+def _wkskeys(wks):
+    return {v: k for k, v in enumerate(wks.row_values(1))}
+
+
+def _get_free_lockers():
+    lockers = get_spreadsheet("Lockers", cache_period=600)
+    lockers_keys = _wkskeys(lockers)
+    locker_sales = get_spreadsheet("Locker_Rentals", cache_period=30)
+    locker_sales_keys = _wkskeys(locker_sales)
+
+    rentable = {entry[lockers_keys["Number"]] for entry in
+                lockers.get_all_values()[1:]
+                if entry[lockers_keys["Type"]] == "Rentable"}
+    for entry in locker_sales.get_all_values()[1:]:
+        locker_number = entry[locker_sales_keys["Locker_Number"]]
+        if (
+            locker_number in rentable and
+            entry[locker_sales_keys["Locker_Number"]] != "Yes"
+        ):
+            rentable.remove(locker_number)
+
+    return "\n<br>".join(sorted(rentable, key=lambda x: int(x)))
+
+
+def _cache_free_lockers(cache_period=30):
+    top = flask._app_ctx_stack
+    if not hasattr(top, 'free_lockers'):
+        top.free_lockers = None
+
+    if top.free_lockers is None or time() - top.free_lockers[0] < 30:
+        top.free_lockers = time(), _get_free_lockers()
+
+    return top.free_lockers[1]
+
+
+@app.route('/student/availablelockers')
+def available_lockers():
+    return _cache_free_lockers()
+
+
 @app.route('/student/rentalocker')
 @authenticated(TYPE_USER)
 def rentalocker(credentials):
