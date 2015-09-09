@@ -4,6 +4,7 @@ from functools import wraps
 from time import time
 
 import flask
+import gspread
 import httplib2
 from apiclient import discovery
 from oauth2client import client
@@ -22,7 +23,7 @@ TYPE_EDITOR = "editor"
 
 SCOPES = {
     TYPE_USER: [SCOPE_USEREMAIL],
-    TYPE_EDITOR: [SCOPE_DRIVE]
+    TYPE_EDITOR: [SCOPE_DRIVE, 'https://spreadsheets.google.com/feeds']
 }
 
 
@@ -102,6 +103,28 @@ def _get_spreadsheet(name, cache_period, gc=None):
 
     return top.sheets[name][1]
 
+
+def sheet2dict(sheet, index_key):
+    class NonUniqueIndexError(Exception):
+        pass
+
+    d = {}
+    rkeys = dict(enumerate(sheet.row_values(1)))
+    keys = sheet.row_values(1)
+    if index_key not in rkeys.values():
+        raise KeyError("{} does not exist in {}".format(index_key, sheet.title))
+    for entry in sheet.get_all_values()[1:]:
+        pk_val = entry[[i for i,key in enumerate(keys) if key==index_key][0]]
+        if pk_val in d:
+            raise NonUniqueIndexError(pk_val)
+        d[pk_val] = dict(zip(keys, entry))
+
+    return d
+
+
+def sheet2lod(sheet):
+    keys = sheet.row_values(1)
+    return [dict(zip(keys, entry)) for entry in sheet.get_all_values()[1:]]
 
 def _get_service(api, version, credentials):
     http_auth = credentials.authorize(httplib2.Http())
@@ -263,10 +286,37 @@ def rentalocker(credentials):
 
 
 @app.route('/admin/invoicestosend')
-@authenticated(TYPE_USER)
+@authenticated(TYPE_EDITOR)
 def invoices_to_send(credentials):
-    wks = get_spreadsheet_fromusr("Locker_Rentals",
-                                  gc=get_drive_conn(credentials))
+    gc = get_drive_conn(credentials)
+    try:
+        locker_rentals = sheet2lod(get_spreadsheet_fromusr(
+            "Locker_Rentals",
+            gc=gc
+        ))
+        locker_form = sheet2dict(get_spreadsheet_fromusr(
+            "[ECESS] MCLD Locker Rental 2015W1 (Responses)",
+            gc=gc
+        ), "Google_Email")
+        contact_form = sheet2dict(get_spreadsheet_fromusr(
+            "ECESS 2015W Student Contact Form (Responses)",
+            gc=gc
+        ), "Google_Email")
+    except gspread.SpreadsheetNotFound:
+        return "Unauthorized"  # TODO return a 401 here
+
+    l = []
+    for entry in locker_rentals:
+        gmail = entry["Google_Email"]
+        form_entry = locker_form.get(gmail)
+        if form_entry is None:
+            l.append("Could not find {} in rental form responses.".format(gmail))
+            continue
+        payment_type = form_entry["Payment_Method"]
+        if payment_type == "PayPal_Invoice" and entry["Paid"] == "Not_Paid":
+            l.append(contact_form[gmail]["Google_Email"])
+
+    return "\n<br>".join(l)
 
 
 @app.route('/oauth2callback')
@@ -275,6 +325,7 @@ def oauth2callback():
     scopes = [scope for usertype, scopes in SCOPES.items()
               for scope in scopes if usertype in usertypes]
     scope_urls = ['https://www.googleapis.com/auth/{}'.format(scope)
+                  if not scope.startswith("http") else scope
                   for scope in scopes]
     print("Authenticating with scopes: {}".format(scope_urls))
     flow = client.OAuth2WebServerFlow(
