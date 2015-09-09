@@ -1,6 +1,7 @@
 import json
 import os
 from functools import wraps
+from time import time
 
 import flask
 import httplib2
@@ -66,6 +67,31 @@ def get_db():
     return top.drive_conn
 
 
+def get_spreadsheet(name, cache_period=120):
+    """Grabs and returns worksheet1 for given workbook name
+
+    Caches workbook (connection) for cache_period
+    """
+    def get_sheet(top):
+        print("Fetching workbook {}...".format(name))
+        gc = get_db()
+        wks = gc.open(name).sheet1
+        top.sheets[name] = (time(), wks)
+
+    top = flask._app_ctx_stack
+    if not hasattr(top, 'sheets'):
+        top.sheets = {}
+
+    if name not in top.sheets:
+        get_sheet(top)
+    else:
+        t, wks = top.sheets[name]
+        if time() - t > cache_period:
+            get_sheet(top)
+
+    return top.sheets[name][1]
+
+
 def _get_service(api, version, credentials):
     http_auth = credentials.authorize(httplib2.Http())
     service = discovery.build(api, version, http_auth)
@@ -109,6 +135,80 @@ def student_register(credentials):
     oauth2_service = get_oauth2_service(credentials)
     google_email = oauth2_service.userinfo().get().execute()["email"]
     return flask.redirect(FORM_URL.format(google_email=google_email))
+
+
+@app.route('/student/rentalocker')
+@authenticated(TYPE_USER)
+def rentalocker(credentials):
+    oauth2_service = get_oauth2_service(credentials)
+    google_email = oauth2_service.userinfo().get().execute()["email"]
+
+    # Check if they're registered
+    wks = get_spreadsheet("ECESS 2015W Student Contact Form (Responses)")
+    keys = {v: k for k, v in enumerate(wks.row_values(1))}
+    for entry in wks.get_all_values()[1:]:
+        if entry[keys["Google_Email"]] == google_email:
+            break
+    else:
+        return "You don't seem to be in our database yet! Please visit " \
+               "<a href=\"{0}\">{0}</a> to fill out your " \
+               "contact information first.".format(
+            flask.url_for("student_register", _external=True)
+        )
+
+    # Check if they have a locker sales entry
+    wks = get_spreadsheet("[ECESS] MCLD Locker Rental 2015W1 (Responses)")
+    locker_form_keys = {v: k for k, v in enumerate(wks.row_values(1))}
+    for locker_form_entry in wks.get_all_values()[1:]:
+        if locker_form_entry[locker_form_keys["Google_Email"]] == google_email:
+            payment_type = locker_form_entry[locker_form_keys["Payment_Method"]]
+            break
+    else:
+        FORM_URL = "https://docs.google.com/forms/d/" \
+               "1ixLqNKOggJqdasJ1u5QgQQA9bpLXpKO8F9XIHDKwy-0/" \
+               "viewform?entry.1882898146={google_email}"
+        return flask.redirect(FORM_URL.format(google_email=google_email))
+
+    # Present their status
+    res = ["Step 1 (Rental Request Form): Complete! We have received your form."]
+    wks = get_spreadsheet("Locker_Rentals")
+    keys = {v: k for k, v in enumerate(wks.row_values(1))}
+    for entry in wks.get_all_values()[1:]:
+        if (
+            entry[keys["Google_Email"]] == google_email and
+            entry[keys["Term"]] == "2015W1"
+        ):
+            payment_status = entry[keys["Paid"]]
+            if payment_status == "Not_Paid":
+                if payment_type == "Cash":
+                    res.append("Step 2 (Payment): Waiting for your payment; please"
+                               " visit MCLD 434 to pay with cash! Cost is"
+                               " $11.")
+                elif payment_type == "PayPal_Invoice":
+                    res.append("Step 2 (Payment): We need to send you a PayPal Invoice; "
+                               "you should receive it soon so that you "
+                               "are able to pay for your locker.")
+            elif payment_status == "Invoice_Sent":
+                res.append("Step 2 (Payment): A PayPal Invoice has been sent to your "
+                           " email. Please promptly pay this invoice so that"
+                           " we can assign you a locker number.")
+            elif payment_status == "Payment_Received":
+                res.append("Step 2 (Payment): We have successfully received your "
+                           "payment!")
+                locker_number = entry[keys["Locker_Number"]]
+                if locker_number:
+                    res.append("Step 3 (Locker Assignment): Your locker has been assigned. Your locker"
+                               " is #{}".format(locker_number))
+                else:
+                    res.append("Step 3 (Locker Assignment): We have not yet determined your locker "
+                               "number. Please check back in a bit!")
+
+            return "\n<br>".join(res)
+    else:
+        res.append("Step 1a: We have received your locker rental request. If"
+                   " there are any available lockers for you, we'll try "
+                   "to process it as soon as possible!")
+        return "\n<br>".join(res)
 
 
 @app.route('/oauth2callback')
