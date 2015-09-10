@@ -61,11 +61,16 @@ def authenticated(*usertypes):
     return oauthorized2
 
 
-def get_db():
+def get_db(cache_period=180):
     top = flask._app_ctx_stack
     if not hasattr(top, 'drive_conn'):
-        top.drive_conn = get_drive_conn()
-    return top.drive_conn
+        top.drive_conn = time(), get_drive_conn()
+
+    t, gc = top.drive_conn
+    if time() - t > cache_period:
+        top.drive_conn = time(), get_drive_conn()
+
+    return top.drive_conn[1]
 
 
 def get_spreadsheet_fromsvc(name, cache_period=120):
@@ -176,7 +181,7 @@ def _wkskeys(wks):
 
 
 def _get_free_lockers():
-    lockers = get_spreadsheet_fromsvc("Lockers", cache_period=600)
+    lockers = get_spreadsheet_fromsvc("Lockers", cache_period=120)
     lockers_keys = _wkskeys(lockers)
     locker_sales = get_spreadsheet_fromsvc("Locker_Rentals", cache_period=30)
     locker_sales_keys = _wkskeys(locker_sales)
