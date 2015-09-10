@@ -394,4 +394,4 @@ if __name__ == '__main__':
         print("WARNING: DEBUG MODE IS ENABLED!")
     app.config["PROPAGATE_EXCEPTIONS"] = True
     app.wsgi_app = ReverseProxied(app.wsgi_app)
-    app.run()
+    app.run(threaded=True)
