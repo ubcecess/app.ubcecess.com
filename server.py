@@ -387,5 +387,6 @@ if __name__ == '__main__':
     app.debug = os.getenv("FLASK_DEBUG") == "1"
     if app.debug:
         print("WARNING: DEBUG MODE IS ENABLED!")
+    app.config["PROPAGATE_EXCEPTIONS"] = True
     app.wsgi_app = ReverseProxied(app.wsgi_app)
     app.run()
