@@ -89,24 +89,31 @@ def _get_spreadsheet(name, cache_period, gc=None):
         to fetch a resource. If this is None, service credentials
         will be used!
     """
-    def get_sheet(top, gc):
-        print("Fetching workbook {}...".format(name))
-        gc = get_db() if gc is None else gc
-        wks = gc.open(name).sheet1
-        top.sheets[name] = (time(), wks)
+    # Disable caching for the moment because if connections get
+    #  killed and the old worksheet still uses it, CannotSendRequest happens
 
-    top = flask._app_ctx_stack
-    if not hasattr(top, 'sheets'):
-        top.sheets = {}
+    # def get_sheet(top, gc):
+    #     print("Fetching workbook {}...".format(name))
+    #     gc = get_db() if gc is None else gc
+    #     wks = gc.open(name).sheet1
+    #     top.sheets[name] = (time(), wks)
+    #
+    # top = flask._app_ctx_stack
+    # if not hasattr(top, 'sheets'):
+    #     top.sheets = {}
+    #
+    # if name not in top.sheets:
+    #     get_sheet(top, gc)
+    # else:
+    #     t, wks = top.sheets[name]
+    #     if time() - t > cache_period:
+    #         get_sheet(top, gc)
+    #
+    # return top.sheets[name][1]
 
-    if name not in top.sheets:
-        get_sheet(top, gc)
-    else:
-        t, wks = top.sheets[name]
-        if time() - t > cache_period:
-            get_sheet(top, gc)
-
-    return top.sheets[name][1]
+    gc = get_db() if gc is None else gc
+    wks = gc.open(name).sheet1
+    return wks
 
 
 class NonUniqueIndexError(Exception):
