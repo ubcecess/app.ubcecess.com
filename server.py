@@ -62,15 +62,16 @@ def authenticated(*usertypes):
 
 
 def get_db(cache_period=180):
-    top = flask._app_ctx_stack
-    if not hasattr(top, 'drive_conn'):
-        top.drive_conn = time(), get_drive_conn()
-
-    t, gc = top.drive_conn
-    if time() - t > cache_period:
-        top.drive_conn = time(), get_drive_conn()
-
-    return top.drive_conn[1]
+    # top = flask._app_ctx_stack
+    # if not hasattr(top, 'drive_conn'):
+    #     top.drive_conn = time(), get_drive_conn()
+    #
+    # t, gc = top.drive_conn
+    # if time() - t > cache_period:
+    #     top.drive_conn = time(), get_drive_conn()
+    #
+    # return top.drive_conn[1]
+    return get_drive_conn()
 
 
 def get_spreadsheet_fromsvc(name, cache_period=120):
