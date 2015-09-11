@@ -320,11 +320,15 @@ def invoices_to_send(credentials):
         gmail = entry["Google_Email"]
         form_entry = locker_form.get(gmail)
         if form_entry is None:
-            l.append("Could not find {} in rental form responses.".format(gmail))
+            # l.append("Could not find {} in rental form responses.".format(gmail))
             continue
         payment_type = form_entry["Payment_Method"]
         if payment_type == "PayPal_Invoice" and entry["Paid"] == "Not_Paid":
-            l.append(contact_form[gmail]["Google_Email"])
+            l.append(
+                "Email_Address: {}, Google_Email: {}".format(
+                    contact_form[gmail]["Email_Address"],
+                    contact_form[gmail]["Google_Email"]
+            ))
 
     return "\n<br>".join(l)
 
