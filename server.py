@@ -109,10 +109,11 @@ def _get_spreadsheet(name, cache_period, gc=None):
     return top.sheets[name][1]
 
 
-def sheet2dict(sheet, index_key):
-    class NonUniqueIndexError(Exception):
-        pass
+class NonUniqueIndexError(Exception):
+    pass
 
+
+def sheet2dict(sheet, index_key):
     d = {}
     rkeys = dict(enumerate(sheet.row_values(1)))
     keys = sheet.row_values(1)
@@ -249,7 +250,11 @@ def rentalocker(credentials):
         return flask.redirect(FORM_URL.format(google_email=google_email))
 
     # Present their status
-    res = ["Step 1 (Rental Request Form): Complete! We have received your form."]
+    res = [
+        "Your ID is {}".format(google_email),
+        "",
+        "Step 1 (Rental Request Form): Complete! We have received your form."
+    ]
     wks = get_spreadsheet_fromsvc("Locker_Rentals")
     keys = {v: k for k, v in enumerate(wks.row_values(1))}
     for entry in wks.get_all_values()[1:]:
