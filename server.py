@@ -1,3 +1,4 @@
+from collections import defaultdict
 import json
 import os
 from functools import wraps
@@ -121,7 +122,7 @@ class NonUniqueIndexError(Exception):
     pass
 
 
-def sheet2dict(sheet, index_key):
+def sheet2dict(sheet, index_key, lower=True):
     d = {}
     rkeys = dict(enumerate(sheet.row_values(1)))
     keys = sheet.row_values(1)
@@ -131,7 +132,7 @@ def sheet2dict(sheet, index_key):
         pk_val = entry[[i for i,key in enumerate(keys) if key==index_key][0]]
         if pk_val in d:
             raise NonUniqueIndexError(pk_val)
-        d[pk_val] = dict(zip(keys, entry))
+        d[pk_val.lower() if lower else pk_val] = dict(zip(keys, entry))
 
     return d
 
@@ -337,6 +338,67 @@ def invoices_to_send(credentials):
                     contact_form[gmail]["Email_Address"],
                     contact_form[gmail]["Google_Email"]
             ))
+
+    return "\n<br>".join(l)
+
+
+@app.route('/admin/lockerqueue')
+@authenticated(TYPE_EDITOR)
+def locker_queue(credentials):
+    gc = get_drive_conn(credentials)
+    try:
+        _locker_rentals = sheet2lod(get_spreadsheet_fromusr(
+            "Locker_Rentals",
+            gc=gc
+        ))
+        locker_rentals = defaultdict(list)
+        for lr in _locker_rentals:
+            locker_rentals[lr["Google_Email"].lower()].append(lr)
+        locker_form = sheet2lod(get_spreadsheet_fromusr(
+            "[ECESS] MCLD Locker Rental 2015W1 (Responses)",
+            gc=gc
+        ))
+        contact_form = sheet2dict(get_spreadsheet_fromusr(
+            "ECESS 2015W Student Contact Form (Responses)",
+            gc=gc
+        ), "Google_Email")
+    except gspread.SpreadsheetNotFound:
+        return "Unauthorized"  # TODO return a 401 here
+
+    d = {
+        "pre_150_ece_renewal": [],
+        "ece": [],
+        "non_ece": [],
+        "no_contact_email": []
+    }
+
+
+    for i, entry in enumerate(locker_form):
+        gmail = entry["Google_Email"].lower()
+        # TODO XXX Handle multiple terms
+        if gmail not in locker_rentals:
+            contact_user = contact_form.get(gmail)
+            if contact_user is None:
+                d["no_contact_email"].append(gmail)
+                continue
+            if contact_form[gmail]["Dept"] == "ECE":
+                if i < 150 and entry["Renewal"] == "Yes":
+                    d["pre_150_ece_renewal"].append(gmail)
+                else:
+                    d["ece"].append(gmail)
+            else:
+                d["non_ece"].append(gmail)
+
+    l = []
+    l.append("<br><br>== Pre-150 ECE Renewals ==<br>")
+    l.extend(d["pre_150_ece_renewal"])
+    l.append("<br><br>== ECE students ==<br>")
+    l.extend(d["ece"])
+    l.append("<br><br>== Non-ECE Students ==<br>")
+    l.extend(d["non_ece"])
+    l.append("<br><br>== These students' Google_Emails are not on the Contact sheet, i.e., the"
+             "y have not filled out the Contact form ==<br>")
+    l.extend(d["no_contact_email"])
 
     return "\n<br>".join(l)
 
