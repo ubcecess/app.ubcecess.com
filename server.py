@@ -24,7 +24,8 @@ TYPE_EDITOR = "editor"
 
 SCOPES = {
     TYPE_USER: [SCOPE_USEREMAIL],
-    TYPE_EDITOR: [SCOPE_DRIVE, 'https://spreadsheets.google.com/feeds']
+    TYPE_EDITOR: [SCOPE_DRIVE, 'https://spreadsheets.google.com/feeds',
+                  SCOPE_USEREMAIL]
 }
 
 
@@ -199,15 +200,38 @@ def _get_free_lockers():
     rentable = {entry[lockers_keys["Number"]] for entry in
                 lockers.get_all_values()[1:]
                 if entry[lockers_keys["Type"]] == "Rentable"}
+    all_rentable = rentable.copy()
+    used_locker_numbers = set()
+    doubly_used = []
+    invalid_entries = []
+
     for entry in locker_sales.get_all_values()[1:]:
         locker_number = entry[locker_sales_keys["Locker_Number"]]
+
+        if locker_number in used_locker_numbers:
+            doubly_used.append(entry)
+        elif locker_number and locker_number not in all_rentable:
+            invalid_entries.append(entry)
+
         if (
             locker_number in rentable and
             entry[locker_sales_keys["Locker_Number"]] != "Yes"
         ):
             rentable.remove(locker_number)
+            used_locker_numbers.add(locker_number)
 
-    return "\n<br>".join(sorted(rentable, key=lambda x: int(x)))
+    res = list(sorted(rentable, key=lambda x: int(x)))
+    res.extend([
+        "<br><br>"
+        "Doubly-used locker numbers",
+    ])
+    res.extend(doubly_used)
+    res.extend([
+        "<br><br>",
+        "Invalid entries",
+    ])
+    res.extend(invalid_entries)
+    return "\n<br>".join(map(str, res))
 
 
 def _cache_free_lockers(cache_period=30):
@@ -215,7 +239,7 @@ def _cache_free_lockers(cache_period=30):
     if not hasattr(top, 'free_lockers'):
         top.free_lockers = None
 
-    if top.free_lockers is None or time() - top.free_lockers[0] < 30:
+    if top.free_lockers is None or time() - top.free_lockers[0] > cache_period:
         top.free_lockers = time(), _get_free_lockers()
 
     return top.free_lockers[1]
@@ -375,6 +399,7 @@ def locker_queue(credentials):
 
     for i, entry in enumerate(locker_form):
         gmail = entry["Google_Email"].lower()
+        dln = entry["Desired_Locker_Number"]
         # TODO XXX Handle multiple terms
         if gmail not in locker_rentals:
             contact_user = contact_form.get(gmail)
@@ -383,7 +408,7 @@ def locker_queue(credentials):
                 continue
             if contact_form[gmail]["Dept"] == "ECE":
                 if i < 150 and entry["Renewal"] == "Yes":
-                    d["pre_150_ece_renewal"].append(gmail)
+                    d["pre_150_ece_renewal"].append("{} {}".format(gmail, dln))
                 else:
                     d["ece"].append(gmail)
             else:
