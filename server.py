@@ -260,7 +260,7 @@ def rentalocker(credentials):
     wks = get_spreadsheet_fromsvc("ECESS 2015W Student Contact Form (Responses)")
     keys = {v: k for k, v in enumerate(wks.row_values(1))}
     for entry in wks.get_all_values()[1:]:
-        if entry[keys["Google_Email"]] == google_email:
+        if entry[keys["Google_Email"]].lower() == google_email.lower():
             break
     else:
         return "You don't seem to be in our database yet! Please visit " \
@@ -273,7 +273,7 @@ def rentalocker(credentials):
     wks = get_spreadsheet_fromsvc("[ECESS] MCLD Locker Rental 2015W1 (Responses)")
     locker_form_keys = {v: k for k, v in enumerate(wks.row_values(1))}
     for locker_form_entry in wks.get_all_values()[1:]:
-        if locker_form_entry[locker_form_keys["Google_Email"]] == google_email:
+        if locker_form_entry[locker_form_keys["Google_Email"]].lower() == google_email.lower():
             payment_type = locker_form_entry[locker_form_keys["Payment_Method"]]
             break
     else:
