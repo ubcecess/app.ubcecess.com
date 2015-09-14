@@ -428,6 +428,38 @@ def locker_queue(credentials):
     return "\n<br>".join(l)
 
 
+@app.route("/admin/lockertenants")
+@authenticated(TYPE_EDITOR)
+def locker_tenants(credentials):
+    gc = get_drive_conn(credentials)
+    try:
+        _locker_rentals = sheet2lod(get_spreadsheet_fromusr(
+            "Locker_Rentals",
+            gc=gc
+        ))
+        contact_form = sheet2dict(get_spreadsheet_fromusr(
+            "ECESS 2015W Student Contact Form (Responses)",
+            gc=gc
+        ), "Google_Email")
+    except gspread.SpreadsheetNotFound:
+        return "Unauthorized"  # TODO
+
+    l = []
+    for entry in _locker_rentals:
+        locker_number = entry["Locker_Number"]
+        try:
+            legal_name = contact_form[entry["Google_Email"]]["Full_Legal_Name"]
+        except KeyError:
+            continue
+        if locker_number:
+            l.append(
+                "{}    {}".format(str(locker_number).zfill(3),
+                               legal_name)
+            )
+
+    return "\n<br>".join(sorted(l))
+
+
 @app.route('/oauth2callback')
 def oauth2callback():
     usertypes = flask.session[SessKeys.usertypes]
