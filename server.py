@@ -4,6 +4,7 @@ import os
 from functools import wraps
 from time import time
 
+import arrow
 import flask
 import gspread
 import httplib2
@@ -393,12 +394,17 @@ def locker_queue(credentials):
         "pre_150_ece_renewal": [],
         "ece": [],
         "non_ece": [],
-        "no_contact_email": []
+        "no_contact_email": [],
+        "unpaid_over_4d_no_email": []
     }
 
 
     for i, entry in enumerate(locker_form):
         gmail = entry["Google_Email"].lower()
+        try:
+            email = contact_form[gmail]["Email_Address"]
+        except KeyError:
+            email = None
         dln = entry["Desired_Locker_Number"]
         # TODO XXX Handle multiple terms
         if gmail not in locker_rentals:
@@ -413,6 +419,19 @@ def locker_queue(credentials):
                     d["ece"].append(gmail)
             else:
                 d["non_ece"].append(gmail)
+        else:
+            for lr_entry in locker_rentals[gmail]:
+                if lr_entry["Warning_Email_Sent"] != "Yes" \
+                        and lr_entry["Paid"] == "Not_Paid":
+                    try:
+                        parsed = arrow.get(entry["Timestamp"], "M/DD/YYYY HH:mm:ss")
+                        diff = (arrow.utcnow() - parsed).days
+                        print(diff)
+                        if diff >= 4:
+                            d["unpaid_over_4d_no_email"]\
+                                .append("{}".format(email))
+                    except arrow.parser.ParserError as e:
+                        print("{}: {}".format(entry["Timestamp"], e))
 
     l = []
     l.append("<br><br>== Pre-150 ECE Renewals ==<br>")
@@ -424,6 +443,8 @@ def locker_queue(credentials):
     l.append("<br><br>== These students' Google_Emails are not on the Contact sheet, i.e., the"
              "y have not filled out the Contact form ==<br>")
     l.extend(d["no_contact_email"])
+    l.append("<br><br>== Warning Emails to send ==<br>")
+    l.extend(d["unpaid_over_4d_no_email"])
 
     return "\n<br>".join(l)
 
