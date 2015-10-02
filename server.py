@@ -251,24 +251,46 @@ def available_lockers():
     return _cache_free_lockers()
 
 
-@app.route('/student/rentalocker')
+@app.route('/student/seattle/signup')
 @authenticated(TYPE_USER)
-def rentalocker(credentials):
+def seattle_signup(credentials):
     oauth2_service = get_oauth2_service(credentials)
     google_email = oauth2_service.userinfo().get().execute()["email"]
 
+    not_registered = _check_not_registered(google_email)
+    if not_registered is not None:
+        return not_registered
+
+    FORM_URL = "https://docs.google.com/forms/d/" \
+               "1dW7sqp0lc7nAGhpFYKki5KCqNYDSbEAdAe-0eMBd9eM/" \
+               "viewform?entry.694442738={google_email}"
+    return flask.redirect(FORM_URL.format(google_email=google_email))
+
+
+def _check_not_registered(google_email):
     # Check if they're registered
     wks = get_spreadsheet_fromsvc("ECESS 2015W Student Contact Form (Responses)")
     keys = {v: k for k, v in enumerate(wks.row_values(1))}
     for entry in wks.get_all_values()[1:]:
         if entry[keys["Google_Email"]].lower() == google_email.lower():
-            break
+            return None
     else:
         return "You don't seem to be in our database yet! Please visit " \
                "<a href=\"{0}\">{0}</a> to fill out your " \
                "contact information first.".format(
             flask.url_for("student_register", _external=True)
         )
+
+
+@app.route('/student/rentalocker')
+@authenticated(TYPE_USER)
+def rentalocker(credentials):
+    oauth2_service = get_oauth2_service(credentials)
+    google_email = oauth2_service.userinfo().get().execute()["email"]
+
+    not_registered = _check_not_registered(google_email)
+    if not_registered is not None:
+        return not_registered
 
     # Check if they have a locker sales entry
     wks = get_spreadsheet_fromsvc("[ECESS] MCLD Locker Rental 2015W1 (Responses)")
