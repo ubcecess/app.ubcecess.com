@@ -276,7 +276,7 @@ def _check_not_registered(google_email):
             return None
     else:
         return "You don't seem to be in our database yet! Please visit " \
-               "<a href=\"{0}\">{0}</a> to fill out your " \
+               "<a href=\"{0}\" target=\"_blank\">{0}</a> to fill out your " \
                "contact information first.".format(
             flask.url_for("student_register", _external=True)
         )
