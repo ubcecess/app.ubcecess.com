@@ -351,6 +351,47 @@ def rentalocker(credentials):
         return "\n<br>".join(res)
 
 
+@app.route('/admin/seattle/review')
+@authenticated(TYPE_EDITOR)
+def admin_seattle_apps(credentials):
+    gc = get_drive_conn(credentials)
+    try:
+        seattle_form = sheet2dict(get_spreadsheet_fromusr(
+            "Seattle Trip 2015 Sign-Up (Responses)",
+            gc=gc
+        ), "Google_Email")
+        contact_form = sheet2dict(get_spreadsheet_fromusr(
+            "ECESS 2015W Student Contact Form (Responses)",
+            gc=gc
+        ), "Google_Email")
+    except gspread.SpreadsheetNotFound:
+        return "Unauthorized"  # TODO return a 401 here
+
+    l = []
+    stats = {
+        "Dept": defaultdict(int),
+        "Year": defaultdict(int)
+    }
+    names = []
+    for gmail, entry in seattle_form.items():
+        usr = contact_form[gmail]
+        l.append((entry, usr))
+        stats["Dept"]["{}_{}".format(usr["Dept"], usr["Program"])] += 1
+        stats["Year"][usr["Academic_Year"]] += 1
+
+        names.append(usr["Full_Legal_Name"])
+
+    res = [json.dumps(stats, indent=4).replace(
+        "\n", "<br>")]
+    res += ["<br>".join(json.dumps(d, indent=4).replace(
+        "\n", "<br>")
+                                             for d in
+                                             t)
+    for t in l]
+    res += ["<br>".join(names)]
+    return "\n<br><br><br>".join(res)
+
+
 @app.route('/admin/invoicestosend')
 @authenticated(TYPE_EDITOR)
 def invoices_to_send(credentials):
