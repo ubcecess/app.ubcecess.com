@@ -277,7 +277,9 @@ def _check_not_registered(google_email):
     else:
         return "You don't seem to be in our database yet! Please visit " \
                "<a href=\"{0}\" target=\"_blank\">{0}</a> to fill out your " \
-               "contact information first.".format(
+               "contact information first. Then simply refresh the page to " \
+               "continue." \
+               "".format(
             flask.url_for("student_register", _external=True)
         )
 
@@ -353,11 +355,21 @@ def rentalocker(credentials):
 
 @app.route('/admin/seattle/review')
 @authenticated(TYPE_EDITOR)
-def admin_seattle_apps(credentials):
+def admin_seattle_review(credentials):
+    return _admin_seattle_review(credentials, spreadsheet="Seattle Trip 2015 Sign-Up (Responses)")
+
+
+@app.route('/admin/seattle/confreview')
+@authenticated(TYPE_EDITOR)
+def admin_seattle_confreview(credentials):
+    return _admin_seattle_review(credentials, spreadsheet="Confirmed Attendees")
+
+
+def _admin_seattle_review(credentials, spreadsheet="Seattle Trip 2015 Sign-Up (Responses)"):
     gc = get_drive_conn(credentials)
     try:
         seattle_form = sheet2dict(get_spreadsheet_fromusr(
-            "Seattle Trip 2015 Sign-Up (Responses)",
+            spreadsheet,
             gc=gc
         ), "Google_Email")
         contact_form = sheet2dict(get_spreadsheet_fromusr(
@@ -374,7 +386,11 @@ def admin_seattle_apps(credentials):
     }
     names = []
     for gmail, entry in seattle_form.items():
-        usr = contact_form[gmail]
+        try:
+            usr = contact_form[gmail]
+        except KeyError:
+            print("Invalid email: {}".format(gmail))
+            continue
         l.append((entry, usr))
         stats["Dept"]["{}_{}".format(usr["Dept"], usr["Program"])] += 1
         stats["Year"][usr["Academic_Year"]] += 1
