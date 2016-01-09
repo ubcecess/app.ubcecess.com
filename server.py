@@ -267,6 +267,18 @@ def seattle_signup(credentials):
     return flask.redirect(FORM_URL.format(google_email=google_email))
 
 
+@app.route('/student/sv2016/signup')
+@authenticated(TYPE_USER)
+def sv2016_signup(credentials):
+    oauth2_service = get_oauth2_service(credentials)
+    google_email = oauth2_service.userinfo().get().execute()["email"]
+
+    FORM_URL = "https://docs.google.com/forms/d/" \
+               "1ZE_sXC7KOqDzOfx0vXQt3gMvEovGWPbfiVR0BYww2kA/" \
+               "viewform?entry.1122073806={google_email}"
+    return flask.redirect(FORM_URL.format(google_email=google_email))
+
+
 def _check_not_registered(google_email):
     # Check if they're registered
     wks = get_spreadsheet_fromsvc("ECESS 2015W Student Contact Form (Responses)")
