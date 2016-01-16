@@ -279,6 +279,18 @@ def sv2016_signup(credentials):
     return flask.redirect(FORM_URL.format(google_email=google_email))
 
 
+@app.route('/orderjacket')
+@authenticated(TYPE_USER)
+def orderjacket(credentials):
+    oauth2_service = get_oauth2_service(credentials)
+    google_email = oauth2_service.userinfo().get().execute()["email"]
+
+    FORM_URL = "https://docs.google.com/forms/d/" \
+               "1lzNxBIZ8LWzOyXyqJ54SyFBi3JpLzrDmZcPCq7VnbJ8" \
+               "/viewform?entry.345019471={google_email}"
+    return flask.redirect(FORM_URL.format(google_email=google_email))
+
+
 def _check_not_registered(google_email):
     # Check if they're registered
     wks = get_spreadsheet_fromsvc("ECESS 2015W Student Contact Form (Responses)")
